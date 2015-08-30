@@ -78,26 +78,27 @@ func (s *SubunitSuite) TestWithIDPackageMustSetPresentFlag(c *check.C) {
 		check.Commentf("Test ID present flag is not set"))
 }
 
-func (s *SubunitSuite) TestWithoutStatusPackageMustNotSetFlag(c *check.C) {
-	s.stream.Status("dummytest", "")
-	s.output.Next(1)
-	flags := s.output.Next(2)
-	testStatus := flags[1] & 0x7 // Last three bits of the second byte.
-	c.Assert(testStatus, check.Equals, uint8(0x0), check.Commentf("Wrong status"))
+var statustests = []struct {
+	status string
+	flag   byte
+}{
+	{"", 0x0},
+	{"undefined", 0x0},
+	{"exists", 0x1},
+	{"inprogress", 0x2},
+	{"success", 0x3},
+	{"uxsuccess", 0x4},
+	{"skip", 0x5},
+	{"fail", 0x6},
+	{"xfail", 0x7},
 }
 
-func (s *SubunitSuite) TestWithUndefinedStatusPackageMustNotSetFlag(c *check.C) {
-	s.stream.Status("dummytest", "undefined")
-	s.output.Next(1)
-	flags := s.output.Next(2)
-	testStatus := flags[1] & 0x7 // Last three bits of the second byte.
-	c.Assert(testStatus, check.Equals, uint8(0x0), check.Commentf("Wrong status"))
-}
-
-func (s *SubunitSuite) TestSuccessPackageMustSetStatusFlag(c *check.C) {
-	s.stream.Status("dummytest", "success")
-	s.output.Next(1)
-	flags := s.output.Next(2)
-	testStatus := flags[1] & 0x7 // Last three bits of the second byte.
-	c.Assert(testStatus, check.Equals, uint8(0x3), check.Commentf("Wrong status"))
+func (s *SubunitSuite) TestPackageStatusFlag(c *check.C) {
+	for _, t := range statustests {
+		s.stream.Status("dummytest", t.status)
+		s.output.Next(1)
+		flags := s.output.Next(2)
+		testStatus := flags[1] & 0x7 // Last three bits of the second byte.
+		c.Check(testStatus, check.Equals, t.flag, check.Commentf("Wrong status"))
+	}
 }

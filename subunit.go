@@ -32,7 +32,13 @@ const (
 )
 
 var status = map[string]byte{
-	"success": 0x3,
+	"exists":     0x1,
+	"inprogress": 0x2,
+	"success":    0x3,
+	"uxsuccess":  0x4,
+	"skip":       0x5,
+	"fail":       0x6,
+	"xfail":      0x7,
 }
 
 type StreamResultToBytes struct {
