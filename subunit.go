@@ -25,7 +25,10 @@ import (
 	"io"
 )
 
-const signature byte = 0xb3
+const (
+	signature byte = 0xb3
+	version   byte = 0x2
+)
 
 type StreamResultToBytes struct {
 	Output io.Writer
@@ -37,8 +40,15 @@ type packet struct {
 func (p *packet) write(writer io.Writer) error {
 	var b bytes.Buffer
 	b.WriteByte(signature)
+	b.Write(p.makeFlags())
 	_, err := writer.Write(b.Bytes())
 	return err
+}
+
+func (p *packet) makeFlags() []byte {
+	flags := make([]byte, 2, 2)
+	flags[0] = version << 4
+	return flags
 }
 
 func (s *StreamResultToBytes) Status(test_id, test_status string) error {

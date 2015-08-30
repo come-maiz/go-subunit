@@ -51,3 +51,11 @@ func (s *SubunitSuite) TestPacketMustContainSignature(c *check.C) {
 	c.Check(int(signature), check.Equals, 0xb3,
 		check.Commentf("Wrong signature"))
 }
+
+func (s *SubunitSuite) TestPackegMustContainVersion2Falg(c *check.C) {
+	s.stream.Status("dummytest", "dummystatus")
+	s.output.Next(1)
+	flags := s.output.Next(2)
+	version := flags[0] >> 4
+	c.Check(version, check.Equals, uint8(0x2), check.Commentf("Wrong version"))
+}
