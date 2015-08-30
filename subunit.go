@@ -31,12 +31,17 @@ const (
 	testIDPresent byte = 0x8
 )
 
+var status = map[string]byte{
+	"success": 0x3,
+}
+
 type StreamResultToBytes struct {
 	Output io.Writer
 }
 
 type packet struct {
 	testID string
+	status string
 }
 
 func (p *packet) write(writer io.Writer) error {
@@ -53,10 +58,11 @@ func (p *packet) makeFlags() []byte {
 	if p.testID != "" {
 		flags[0] = flags[0] | testIDPresent
 	}
+	flags[1] = flags[0] | status[p.status]
 	return flags
 }
 
 func (s *StreamResultToBytes) Status(testID, testStatus string) error {
-	p := packet{testID: testID}
+	p := packet{testID: testID, status: testStatus}
 	return p.write(s.Output)
 }
