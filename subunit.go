@@ -22,6 +22,8 @@ package subunit
 
 import (
 	"bytes"
+	"encoding/binary"
+	"hash/crc32"
 	"io"
 )
 
@@ -51,9 +53,22 @@ type packet struct {
 }
 
 func (p *packet) write(writer io.Writer) error {
+	var bTemp bytes.Buffer
+	bTemp.WriteByte(signature)
+	bTemp.Write(p.makeFlags())
+
+	// FIXME Support lenghts of 2, 3 and 4 bytes. --elopio - 2015-08-30
+	length := bTemp.Len() + 1 + 4 // Add the size for the length itself and the CRC32.
+	// Insert the length.
 	var b bytes.Buffer
-	b.WriteByte(signature)
-	b.Write(p.makeFlags())
+	b.Write(bTemp.Next(3)) // signature (1 byte) and flags (2 bytes)
+	binary.Write(&b, binary.BigEndian, uint8(length))
+	b.Write(bTemp.Next(bTemp.Len()))
+
+	// Add the CRC32
+	crc := crc32.ChecksumIEEE(b.Bytes())
+	binary.Write(&b, binary.BigEndian, crc)
+
 	_, err := writer.Write(b.Bytes())
 	return err
 }
@@ -64,7 +79,7 @@ func (p *packet) makeFlags() []byte {
 	if p.testID != "" {
 		flags[0] = flags[0] | testIDPresent
 	}
-	flags[1] = flags[0] | status[p.status]
+	flags[1] = flags[1] | status[p.status]
 	return flags
 }
 

@@ -21,6 +21,8 @@ package subunit_test
 
 import (
 	"bytes"
+	"encoding/binary"
+	"hash/crc32"
 	"testing"
 
 	"github.com/subunit"
@@ -54,7 +56,7 @@ func (s *SubunitSuite) TestPacketMustContainSignature(c *check.C) {
 
 func (s *SubunitSuite) TestPackageMustContainVersion2Flag(c *check.C) {
 	s.stream.Status("dummytest", "dummystatus")
-	s.output.Next(1)
+	s.output.Next(1) // skip the signature.
 	flags := s.output.Next(2)
 	version := flags[0] >> 4 // 4 first bits of the first byte.
 	c.Assert(version, check.Equals, uint8(0x2), check.Commentf("Wrong version"))
@@ -62,7 +64,7 @@ func (s *SubunitSuite) TestPackageMustContainVersion2Flag(c *check.C) {
 
 func (s *SubunitSuite) TestWithoutIDPackageMustNotSetPresentFlag(c *check.C) {
 	s.stream.Status("", "dummystatus")
-	s.output.Next(1)
+	s.output.Next(1) // skip the signature.
 	flags := s.output.Next(2)
 	testIDPresent := flags[0] & 0x8 // bit 11 of the first byte.
 	c.Assert(testIDPresent, check.Equals, uint8(0x0),
@@ -71,7 +73,7 @@ func (s *SubunitSuite) TestWithoutIDPackageMustNotSetPresentFlag(c *check.C) {
 
 func (s *SubunitSuite) TestWithIDPackageMustSetPresentFlag(c *check.C) {
 	s.stream.Status("test-id", "dummystatus")
-	s.output.Next(1)
+	s.output.Next(1) // skip the signature.
 	flags := s.output.Next(2)
 	testIDPresent := flags[0] & 0x8 // bit 11 of the first byte.
 	c.Assert(testIDPresent, check.Equals, uint8(0x8),
@@ -95,10 +97,38 @@ var statustests = []struct {
 
 func (s *SubunitSuite) TestPackageStatusFlag(c *check.C) {
 	for _, t := range statustests {
+		s.output.Reset()
 		s.stream.Status("dummytest", t.status)
-		s.output.Next(1)
+		s.output.Next(1) // skip the signature.
 		flags := s.output.Next(2)
 		testStatus := flags[1] & 0x7 // Last three bits of the second byte.
-		c.Check(testStatus, check.Equals, t.flag, check.Commentf("Wrong status"))
+		c.Check(testStatus, check.Equals, t.flag,
+			check.Commentf("Wrong status for %s", t.status))
 	}
+}
+
+func (s *SubunitSuite) TestPackageLength(c *check.C) {
+	s.stream.Status("", "dummystatus")
+	s.output.Next(3) // skip the signature (1 byte) and the flags (2 bytes)
+	length := s.output.Next(1)[0]
+	// signature (1 byte) + flags (2 bytes) + length (2 bytes) + CRC32 (4 bytes)
+	var expectedLength byte = 8
+	c.Assert(length, check.Equals, expectedLength, check.Commentf("Wrong length"))
+}
+
+func (s *SubunitSuite) TestPackageCRC32(c *check.C) {
+	s.stream.Status("", "")
+	// skip the signature (1 byte), the flags (2 bytes) and the length (1 byte)
+	s.output.Next(4)
+	crc := s.output.Next(4)
+	expectedCRC32 := make([]byte, 4)
+	binary.BigEndian.PutUint32(expectedCRC32,
+		// signature = 0xb3
+		// flags with only version = 0x20 0x0
+		// size = 0x8
+		crc32.ChecksumIEEE([]byte{0xb3, 0x20, 0x0, 0x8}))
+	c.Assert(crc, check.DeepEquals, expectedCRC32, check.Commentf("Wrong CRC32"))
+	// Check against a CRC generated with python's subunit.
+	c.Assert(crc, check.DeepEquals, []byte{0x18, 0x15, 0xf0, 0xba},
+		check.Commentf("Wrong CRC32"))
 }
