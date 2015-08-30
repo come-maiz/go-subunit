@@ -48,14 +48,32 @@ func (s *SubunitSuite) SetUpTest(c *check.C) {
 func (s *SubunitSuite) TestPacketMustContainSignature(c *check.C) {
 	s.stream.Status("dummytest", "dummystatus")
 	signature := s.output.Next(1)[0]
-	c.Check(int(signature), check.Equals, 0xb3,
+	c.Assert(int(signature), check.Equals, 0xb3,
 		check.Commentf("Wrong signature"))
 }
 
-func (s *SubunitSuite) TestPackegMustContainVersion2Falg(c *check.C) {
+func (s *SubunitSuite) TestPackageMustContainVersion2Flag(c *check.C) {
 	s.stream.Status("dummytest", "dummystatus")
 	s.output.Next(1)
 	flags := s.output.Next(2)
 	version := flags[0] >> 4
-	c.Check(version, check.Equals, uint8(0x2), check.Commentf("Wrong version"))
+	c.Assert(version, check.Equals, uint8(0x2), check.Commentf("Wrong version"))
+}
+
+func (s *SubunitSuite) TestPackageWithoutTestIDMustUnsetFlag(c *check.C) {
+	s.stream.Status("", "dummystatus")
+	s.output.Next(1)
+	flags := s.output.Next(2)
+	testIDPresent := flags[0] & 0x8
+	c.Assert(testIDPresent, check.Equals, uint8(0x0),
+		check.Commentf("Test ID present flag is set"))
+}
+
+func (s *SubunitSuite) TestPackageWithTestIDMustSetFlag(c *check.C) {
+	s.stream.Status("test-id", "dummystatus")
+	s.output.Next(1)
+	flags := s.output.Next(2)
+	testIDPresent := flags[0] & 0x8
+	c.Assert(testIDPresent, check.Equals, uint8(0x8),
+		check.Commentf("Test ID present flag is not set"))
 }

@@ -26,8 +26,9 @@ import (
 )
 
 const (
-	signature byte = 0xb3
-	version   byte = 0x2
+	signature     byte = 0xb3
+	version       byte = 0x2
+	testIDPresent byte = 0x8
 )
 
 type StreamResultToBytes struct {
@@ -35,6 +36,7 @@ type StreamResultToBytes struct {
 }
 
 type packet struct {
+	testID string
 }
 
 func (p *packet) write(writer io.Writer) error {
@@ -48,10 +50,13 @@ func (p *packet) write(writer io.Writer) error {
 func (p *packet) makeFlags() []byte {
 	flags := make([]byte, 2, 2)
 	flags[0] = version << 4
+	if p.testID != "" {
+		flags[0] = flags[0] | testIDPresent
+	}
 	return flags
 }
 
-func (s *StreamResultToBytes) Status(test_id, test_status string) error {
-	p := packet{}
+func (s *StreamResultToBytes) Status(testID, testStatus string) error {
+	p := packet{testID: testID}
 	return p.write(s.Output)
 }
