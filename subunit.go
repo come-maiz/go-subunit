@@ -43,6 +43,7 @@ var status = map[string]byte{
 	"xfail":      0x7,
 }
 
+// StreamResultToBytes is an implementation of the StreamResult API that converts calls to bytes.
 type StreamResultToBytes struct {
 	Output io.Writer
 }
@@ -56,6 +57,10 @@ func (p *packet) write(writer io.Writer) error {
 	var bTemp bytes.Buffer
 	bTemp.WriteByte(signature)
 	bTemp.Write(p.makeFlags())
+	if p.testID != "" {
+		binary.Write(&bTemp, binary.BigEndian, uint8(len(p.testID)))
+		bTemp.WriteString(p.testID)
+	}
 
 	// FIXME Support lenghts of 2, 3 and 4 bytes. --elopio - 2015-08-30
 	length := bTemp.Len() + 1 + 4 // Add the size for the length itself and the CRC32.
@@ -83,6 +88,7 @@ func (p *packet) makeFlags() []byte {
 	return flags
 }
 
+// Status informs the result about a test status.
 func (s *StreamResultToBytes) Status(testID, testStatus string) error {
 	p := packet{testID: testID, status: testStatus}
 	return p.write(s.Output)

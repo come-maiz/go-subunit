@@ -23,14 +23,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"hash/crc32"
-	"testing"
 
 	"github.com/elopio/subunit"
 
 	check "gopkg.in/check.v1"
 )
-
-func Test(t *testing.T) { check.TestingT(t) }
 
 var _ = check.Suite(&SubunitSuite{})
 
@@ -131,4 +128,14 @@ func (s *SubunitSuite) TestPacketCRC32(c *check.C) {
 	// Check against a CRC generated with python's subunit.
 	c.Assert(crc, check.DeepEquals, []byte{0x18, 0x15, 0xf0, 0xba},
 		check.Commentf("Wrong CRC32"))
+}
+
+func (s *SubunitSuite) TestPacketTestID(c *check.C) {
+	s.stream.Status("test-id", "")
+	// skip the signature (1 byte), the flags (2 bytes) and the lenght (1 byte)
+	s.output.Next(4)
+	idLen := int(s.output.Next(1)[0])
+	c.Assert(idLen, check.Equals, len("test-id"))
+	id := string(s.output.Next(idLen))
+	c.Assert(id, check.Equals, "test-id")
 }
