@@ -3,5 +3,5 @@ language: go
 python:
   - "3.4"
 
-before_script:
+install:
   pip install python-subunit
