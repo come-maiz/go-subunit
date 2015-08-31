@@ -66,7 +66,7 @@ func (s *SubunitReferenceSuite) TestReference(c *check.C) {
 		err := stream.Status(t.id, t.status)
 		c.Check(err, check.IsNil, check.Commentf("Error running the go version of subunit"))
 
-		cmd := exec.Command("python3", "-c", fmt.Sprintf(
+		cmd := exec.Command("python", "-c", fmt.Sprintf(
 			// FIXME the runnable flag must be a parameter. --elopio - 2015-08-31
 			"import subunit; import sys; subunit.StreamResultToBytes(sys.stdout).status(test_id=%q, test_status=%q, runnable=False)",
 			t.id, t.status))
