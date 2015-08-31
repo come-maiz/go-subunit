@@ -25,7 +25,7 @@ import (
 	"hash/crc32"
 	"testing"
 
-	"github.com/subunit"
+	"github.com/elopio/subunit"
 
 	check "gopkg.in/check.v1"
 )
