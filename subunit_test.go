@@ -54,7 +54,7 @@ func (s *SubunitSuite) TestPacketMustContainSignature(c *check.C) {
 		check.Commentf("Wrong signature"))
 }
 
-func (s *SubunitSuite) TestPackageMustContainVersion2Flag(c *check.C) {
+func (s *SubunitSuite) TestPacketMustContainVersion2Flag(c *check.C) {
 	s.stream.Status("dummytest", "dummystatus")
 	s.output.Next(1) // skip the signature.
 	flags := s.output.Next(2)
@@ -62,7 +62,7 @@ func (s *SubunitSuite) TestPackageMustContainVersion2Flag(c *check.C) {
 	c.Assert(version, check.Equals, uint8(0x2), check.Commentf("Wrong version"))
 }
 
-func (s *SubunitSuite) TestWithoutIDPackageMustNotSetPresentFlag(c *check.C) {
+func (s *SubunitSuite) TestWithoutIDPacketMustNotSetPresentFlag(c *check.C) {
 	s.stream.Status("", "dummystatus")
 	s.output.Next(1) // skip the signature.
 	flags := s.output.Next(2)
@@ -71,7 +71,7 @@ func (s *SubunitSuite) TestWithoutIDPackageMustNotSetPresentFlag(c *check.C) {
 		check.Commentf("Test ID present flag is set"))
 }
 
-func (s *SubunitSuite) TestWithIDPackageMustSetPresentFlag(c *check.C) {
+func (s *SubunitSuite) TestWithIDPacketMustSetPresentFlag(c *check.C) {
 	s.stream.Status("test-id", "dummystatus")
 	s.output.Next(1) // skip the signature.
 	flags := s.output.Next(2)
@@ -95,7 +95,7 @@ var statustests = []struct {
 	{"xfail", 0x7},
 }
 
-func (s *SubunitSuite) TestPackageStatusFlag(c *check.C) {
+func (s *SubunitSuite) TestPacketStatusFlag(c *check.C) {
 	for _, t := range statustests {
 		s.output.Reset()
 		s.stream.Status("dummytest", t.status)
@@ -107,7 +107,7 @@ func (s *SubunitSuite) TestPackageStatusFlag(c *check.C) {
 	}
 }
 
-func (s *SubunitSuite) TestPackageLength(c *check.C) {
+func (s *SubunitSuite) TestPacketLength(c *check.C) {
 	s.stream.Status("", "dummystatus")
 	s.output.Next(3) // skip the signature (1 byte) and the flags (2 bytes)
 	length := s.output.Next(1)[0]
@@ -116,7 +116,7 @@ func (s *SubunitSuite) TestPackageLength(c *check.C) {
 	c.Assert(length, check.Equals, expectedLength, check.Commentf("Wrong length"))
 }
 
-func (s *SubunitSuite) TestPackageCRC32(c *check.C) {
+func (s *SubunitSuite) TestPacketCRC32(c *check.C) {
 	s.stream.Status("", "")
 	// skip the signature (1 byte), the flags (2 bytes) and the length (1 byte)
 	s.output.Next(4)
