@@ -4,4 +4,4 @@ python:
   - "3.4"
 
 before_script:
-  pip install --user python-subunit
+  pip3 install --user python-subunit
