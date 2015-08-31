@@ -35,7 +35,7 @@ type SubunitReferenceSuite struct {
 }
 
 func isSubunitInstalled() bool {
-	cmd := exec.Command("python3", "-c", "import subunit")
+	cmd := exec.Command("python", "-c", "import subunit")
 	err := cmd.Run()
 	return err == nil
 }
