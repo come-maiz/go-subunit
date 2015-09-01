@@ -39,7 +39,7 @@ type SubunitSuite struct {
 
 func (s *SubunitSuite) readNumber() int {
 	byte1 := s.output.Next(1)[0]
-	// Get the first two bits, shift them to the left and add one.
+	// Get the first two bits, shift them to the right and add one.
 	size := ((byte1 & 0xc0) >> 6) + 1
 	// Unset the first two bits.
 	b1Value := uint8(byte1) & 0x3f
