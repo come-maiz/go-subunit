@@ -149,10 +149,8 @@ func writeNumber(b *bytes.Buffer, num int) (err error) {
 		binary.Write(b, binary.BigEndian, uint16(num&0xffff))
 	case num < 1073741824: // 2^(32-2):
 		// Fits in four bytes.
-		// Drop the two least significant bytes and set the size to 11.
-		binary.Write(b, binary.BigEndian, uint16((num>>16)|0xc000))
-		// Drop the two most significant bytes.
-		binary.Write(b, binary.BigEndian, uint16(num&0xffff))
+		// Set the size to 11.
+		binary.Write(b, binary.BigEndian, uint32(num|0xc0000000))
 	default:
 		err = fmt.Errorf("Number is too big: %d", num)
 	}
