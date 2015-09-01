@@ -90,7 +90,6 @@ func (p *packet) write(writer io.Writer) error {
 	bTemp.Write(<-flagsChan)
 	bTemp.Write(<-idChan)
 
-	// FIXME Support lengths of 2, 3 and 4 bytes. --elopio - 2015-08-30
 	length, err := makeLen(bTemp.Len())
 	if err != nil {
 		return err
