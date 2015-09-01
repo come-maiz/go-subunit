@@ -23,6 +23,7 @@ package subunit
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"hash/crc32"
 	"io"
 )
@@ -41,6 +42,25 @@ var status = map[string]byte{
 	"skip":       0x5,
 	"fail":       0x6,
 	"xfail":      0x7,
+}
+
+func makeLen(baseLen int) (len int, err error) {
+	len = baseLen + 4 // Add the length of the CRC32.
+	// We need to take into account the variable length of the length field itself.
+	switch {
+	case len <= 62:
+		// Fits in one byte.
+		len = len + 1
+	case len <= 16381:
+		// Fits in two bytes.
+		len = len + 2
+	case len <= 4194300:
+		// Fits in three bytes.
+		len = len + 3
+	default:
+		err = fmt.Errorf("The packet is too big. Length: %d bytes", len)
+	}
+	return len, err
 }
 
 // StreamResultToBytes is an implementation of the StreamResult API that converts calls to bytes.
@@ -70,19 +90,22 @@ func (p *packet) write(writer io.Writer) error {
 	bTemp.Write(<-flagsChan)
 	bTemp.Write(<-idChan)
 
-	// FIXME Support lenghts of 2, 3 and 4 bytes. --elopio - 2015-08-30
-	length := bTemp.Len() + 1 + 4 // Add the size for the length itself and the CRC32.
+	// FIXME Support lengths of 2, 3 and 4 bytes. --elopio - 2015-08-30
+	length, err := makeLen(bTemp.Len())
+	if err != nil {
+		return err
+	}
 	// Insert the length.
 	var b bytes.Buffer
 	b.Write(bTemp.Next(3)) // signature (1 byte) and flags (2 bytes)
-	binary.Write(&b, binary.BigEndian, uint8(length))
+	writeNumber(&b, length)
 	b.Write(bTemp.Next(bTemp.Len()))
 
 	// Add the CRC32
 	crc := crc32.ChecksumIEEE(b.Bytes())
 	binary.Write(&b, binary.BigEndian, crc)
 
-	_, err := writer.Write(b.Bytes())
+	_, err = writer.Write(b.Bytes())
 	return err
 }
 
@@ -99,10 +122,41 @@ func (p *packet) makeFlags(c chan []byte) {
 func (p *packet) makeTestID(c chan []byte) {
 	var testID bytes.Buffer
 	if p.testID != "" {
-		binary.Write(&testID, binary.BigEndian, uint8(len(p.testID)))
+		writeNumber(&testID, len(p.testID))
 		testID.WriteString(p.testID)
 	}
 	c <- testID.Bytes()
+}
+
+func writeNumber(b *bytes.Buffer, num int) (err error) {
+	// The first two bits encode the size:
+	// 00 = 1 byte
+	// 01 = 2 bytes
+	// 10 = 3 bytes
+	// 11 = 4 bytes
+	switch {
+	case num < 64: // 2^(8-2)
+		// Fits in one byte.
+		binary.Write(b, binary.BigEndian, uint8(num))
+	case num < 16384: // 2^(16-2)
+		// Fits in two bytes.
+		binary.Write(b, binary.BigEndian, uint16(num|0x4000)) // Set the size to 01.
+	case num < 4194304: // 2^(24-2)
+		// Fits in three bytes.
+		// Drop the two least significant bytes and set the size to 10.
+		binary.Write(b, binary.BigEndian, uint8((num>>16)|0x80))
+		// Drop the two most significant bytes.
+		binary.Write(b, binary.BigEndian, uint16(num&0xffff))
+	case num < 1073741824: // 2^(32-2):
+		// Fits in four bytes.
+		// Drop the two least significant bytes and set the size to 11.
+		binary.Write(b, binary.BigEndian, uint16((num>>16)|0xc000))
+		// Drop the two most significant bytes.
+		binary.Write(b, binary.BigEndian, uint16(num&0xffff))
+	default:
+		err = fmt.Errorf("Number is too big: %d", num)
+	}
+	return err
 }
 
 // Status informs the result about a test status.

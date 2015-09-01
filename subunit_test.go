@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"hash/crc32"
+	"strings"
 
 	"github.com/elopio/subunit"
 
@@ -34,6 +35,31 @@ var _ = check.Suite(&SubunitSuite{})
 type SubunitSuite struct {
 	stream *subunit.StreamResultToBytes
 	output bytes.Buffer
+}
+
+func (s *SubunitSuite) readNumber() int {
+	byte1 := s.output.Next(1)[0]
+	// Get the first two bits, shift them to the left and add one.
+	size := ((byte1 & 0xc0) >> 6) + 1
+	// Unset the first two bits.
+	b1Value := uint8(byte1) & 0x3f
+	switch size {
+	case 1:
+		return int(b1Value)
+	case 2:
+		// Add the second byte.
+		return int((int16(b1Value) << 8) | int16(s.output.Next(1)[0]))
+	case 3:
+		// Add the second and third bytes.
+		return int(int32(b1Value)<<16 | int32(s.output.Next(1)[0])<<8 |
+			int32(s.output.Next(1)[0]))
+	case 4:
+		// Add the second, third and fourth bytes.
+		return int(int32(b1Value)<<24 | int32(s.output.Next(1)[0])<<16 |
+			int32(s.output.Next(1)[0])<<8 | int32(s.output.Next(1)[0]))
+	}
+	// Impossible to get here.
+	panic("Something wrong happened reading the number")
 }
 
 func (s *SubunitSuite) SetUpSuite(c *check.C) {
@@ -130,12 +156,32 @@ func (s *SubunitSuite) TestPacketCRC32(c *check.C) {
 		check.Commentf("Wrong CRC32"))
 }
 
+var idtests = []struct {
+	testIDPrefix  string
+	testIDLen     int
+	packetLenSize int // The number of bytes in the packet length.
+}{
+	{"test-id (1 byte)", 16, 1},
+	{"test-id-with-63-chars (1 byte)", 63, 2},
+	{"test-id-with-64-chars (2 bytes)", 64, 2},
+	{"test-id-with-16383-chars (2 bytes)", 16383, 3},
+	{"test-id-with-16384-chars (3 bytes)", 16384, 3},
+	// The size limit of the packet is 4194303. This is the biggest name possible.
+	{"test-id-with-4194290-chars (3 bytes)", 4194290, 3},
+}
+
 func (s *SubunitSuite) TestPacketTestID(c *check.C) {
-	s.stream.Status("test-id", "")
-	// skip the signature (1 byte), the flags (2 bytes) and the lenght (1 byte)
-	s.output.Next(4)
-	idLen := int(s.output.Next(1)[0])
-	c.Assert(idLen, check.Equals, len("test-id"))
-	id := string(s.output.Next(idLen))
-	c.Assert(id, check.Equals, "test-id")
+	for _, t := range idtests {
+		s.output.Reset()
+		testID := t.testIDPrefix + strings.Repeat("_", t.testIDLen-len(t.testIDPrefix))
+		s.stream.Status(testID, "")
+		// skip the signature (1 byte) and the flags (2 bytes)
+		s.output.Next(3)
+		// skip the packet length (variable size)
+		s.readNumber()
+		idLen := s.readNumber()
+		c.Check(idLen, check.Equals, len(testID), check.Commentf("Wrong length"))
+		id := string(s.output.Next(idLen))
+		c.Check(id, check.Equals, testID, check.Commentf("Wrong ID"))
+	}
 }
