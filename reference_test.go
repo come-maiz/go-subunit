@@ -63,7 +63,7 @@ var referencetests = []struct {
 	// Different test id lengths.
 	{"test-id (1 byte)", "exists"},
 	{"test-id-with-63-chars (1 byte____)" + strings.Repeat("_", 63-34), "exists"},
-	{"test-id-with-64-chars (2 bytes___)" + strings.Repeat("_", 65-34), "exists"},
+	{"test-id-with-64-chars (2 bytes___)" + strings.Repeat("_", 64-34), "exists"},
 	{"test-id-with-16383-chars (2 bytes)" + strings.Repeat("_", 16383-34), "exists"},
 	{"test-id-with-16384-chars (3 bytes)" + strings.Repeat("_", 16384-34), "exists"},
 	// We can't test IDs with more length bytes through the command line.
