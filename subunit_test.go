@@ -23,14 +23,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"hash/crc32"
-	"testing"
 
 	"github.com/elopio/subunit"
 
 	check "gopkg.in/check.v1"
 )
-
-func Test(t *testing.T) { check.TestingT(t) }
 
 var _ = check.Suite(&SubunitSuite{})
 
