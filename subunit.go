@@ -86,7 +86,7 @@ func (p *packet) write(writer io.Writer) error {
 	return err
 }
 
-func (p *packet) makeFlags(c chan []byte) {
+func (p *packet) makeFlags(c chan<- []byte) {
 	flags := make([]byte, 2, 2)
 	flags[0] = version << 4
 	if p.testID != "" {
@@ -96,7 +96,7 @@ func (p *packet) makeFlags(c chan []byte) {
 	c <- flags
 }
 
-func (p *packet) makeTestID(c chan []byte) {
+func (p *packet) makeTestID(c chan<- []byte) {
 	var testID bytes.Buffer
 	if p.testID != "" {
 		binary.Write(&testID, binary.BigEndian, uint8(len(p.testID)))
