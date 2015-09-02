@@ -50,13 +50,13 @@ func makeLen(baseLen int) (len int, err error) {
 	switch {
 	case len <= 62:
 		// Fits in one byte.
-		len = len + 1
+		len++
 	case len <= 16381:
 		// Fits in two bytes.
-		len = len + 2
+		len += 2
 	case len <= 4194300:
 		// Fits in three bytes.
-		len = len + 3
+		len += 3
 	default:
 		err = fmt.Errorf("The packet is too big. Length: %d bytes", len)
 	}
