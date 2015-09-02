@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/elopio/subunit"
 	"gopkg.in/check.v1"
@@ -50,6 +51,7 @@ var referencetests = []struct {
 	id     string
 	status string
 }{
+	// Status tests.
 	{"existing-test", "exists"},
 	{"progressing-test", "inprogress"},
 	{"successful-test", "success"},
@@ -57,6 +59,14 @@ var referencetests = []struct {
 	{"skipped-test", "skip"},
 	{"failed-test", "fail"},
 	{"expected-failed-test", "xfail"},
+
+	// Different test id lengths.
+	{"test-id (1 byte)", "exists"},
+	{"test-id-with-63-chars (1 byte____)" + strings.Repeat("_", 63-34), "exists"},
+	{"test-id-with-64-chars (2 bytes___)" + strings.Repeat("_", 64-34), "exists"},
+	{"test-id-with-16383-chars (2 bytes)" + strings.Repeat("_", 16383-34), "exists"},
+	{"test-id-with-16384-chars (3 bytes)" + strings.Repeat("_", 16384-34), "exists"},
+	// We can't test IDs with more length bytes through the command line.
 }
 
 func (s *SubunitReferenceSuite) TestReference(c *check.C) {
