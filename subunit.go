@@ -54,13 +54,21 @@ type packet struct {
 }
 
 func (p *packet) write(writer io.Writer) error {
+	// PACKET := SIGNATURE FLAGES PACKET_LENGTH TIMESTAMP? TESTID? TAGS? MIME? FILECONTENT?
+	//           ROUTING_CODE? CRC32
+
+	flagsChan := make(chan []byte)
+	go p.makeFlags(flagsChan)
+
+	idChan := make(chan []byte)
+	go p.makeTestID(idChan)
+
+	// We construct a temporary buffer because we won't know the lenght until it's finished.
+	// Then we insert the lenght.
 	var bTemp bytes.Buffer
 	bTemp.WriteByte(signature)
-	bTemp.Write(p.makeFlags())
-	if p.testID != "" {
-		binary.Write(&bTemp, binary.BigEndian, uint8(len(p.testID)))
-		bTemp.WriteString(p.testID)
-	}
+	bTemp.Write(<-flagsChan)
+	bTemp.Write(<-idChan)
 
 	// FIXME Support lenghts of 2, 3 and 4 bytes. --elopio - 2015-08-30
 	length := bTemp.Len() + 1 + 4 // Add the size for the length itself and the CRC32.
@@ -78,14 +86,23 @@ func (p *packet) write(writer io.Writer) error {
 	return err
 }
 
-func (p *packet) makeFlags() []byte {
+func (p *packet) makeFlags(c chan<- []byte) {
 	flags := make([]byte, 2, 2)
 	flags[0] = version << 4
 	if p.testID != "" {
 		flags[0] = flags[0] | testIDPresent
 	}
 	flags[1] = flags[1] | status[p.status]
-	return flags
+	c <- flags
+}
+
+func (p *packet) makeTestID(c chan<- []byte) {
+	var testID bytes.Buffer
+	if p.testID != "" {
+		binary.Write(&testID, binary.BigEndian, uint8(len(p.testID)))
+		testID.WriteString(p.testID)
+	}
+	c <- testID.Bytes()
 }
 
 // Status informs the result about a test status.
