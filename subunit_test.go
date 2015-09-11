@@ -24,6 +24,7 @@ import (
 	"encoding/binary"
 	"hash/crc32"
 	"strings"
+	"time"
 
 	"github.com/elopio/subunit"
 
@@ -71,14 +72,14 @@ func (s *SubunitSuite) SetUpTest(c *check.C) {
 }
 
 func (s *SubunitSuite) TestPacketMustContainSignature(c *check.C) {
-	s.stream.Status("dummytest", "dummystatus")
+	s.stream.Status(subunit.Event{TestID: "dummytest", Status: "dummystatus"})
 	signature := s.output.Next(1)[0]
 	c.Assert(int(signature), check.Equals, 0xb3,
 		check.Commentf("Wrong signature"))
 }
 
 func (s *SubunitSuite) TestPacketMustContainVersion2Flag(c *check.C) {
-	s.stream.Status("dummytest", "dummystatus")
+	s.stream.Status(subunit.Event{TestID: "dummytest", Status: "dummystatus"})
 	s.output.Next(1) // skip the signature.
 	flags := s.output.Next(2)
 	version := flags[0] >> 4 // 4 first bits of the first byte.
@@ -86,19 +87,19 @@ func (s *SubunitSuite) TestPacketMustContainVersion2Flag(c *check.C) {
 }
 
 func (s *SubunitSuite) TestWithoutIDPacketMustNotSetPresentFlag(c *check.C) {
-	s.stream.Status("", "dummystatus")
+	s.stream.Status(subunit.Event{TestID: "", Status: "dummystatus"})
 	s.output.Next(1) // skip the signature.
 	flags := s.output.Next(2)
-	testIDPresent := flags[0] & 0x8 // bit 11 of the first byte.
+	testIDPresent := flags[0] & 0x8 // bit 11.
 	c.Assert(testIDPresent, check.Equals, uint8(0x0),
 		check.Commentf("Test ID present flag is set"))
 }
 
 func (s *SubunitSuite) TestWithIDPacketMustSetPresentFlag(c *check.C) {
-	s.stream.Status("test-id", "dummystatus")
+	s.stream.Status(subunit.Event{TestID: "test-id", Status: "dummystatus"})
 	s.output.Next(1) // skip the signature.
 	flags := s.output.Next(2)
-	testIDPresent := flags[0] & 0x8 // bit 11 of the first byte.
+	testIDPresent := flags[0] & 0x8 // bit 11.
 	c.Assert(testIDPresent, check.Equals, uint8(0x8),
 		check.Commentf("Test ID present flag is not set"))
 }
@@ -121,7 +122,7 @@ var statustests = []struct {
 func (s *SubunitSuite) TestPacketStatusFlag(c *check.C) {
 	for _, t := range statustests {
 		s.output.Reset()
-		s.stream.Status("dummytest", t.status)
+		s.stream.Status(subunit.Event{TestID: "dummytest", Status: t.status})
 		s.output.Next(1) // skip the signature.
 		flags := s.output.Next(2)
 		testStatus := flags[1] & 0x7 // Last three bits of the second byte.
@@ -131,7 +132,7 @@ func (s *SubunitSuite) TestPacketStatusFlag(c *check.C) {
 }
 
 func (s *SubunitSuite) TestPacketLength(c *check.C) {
-	s.stream.Status("", "dummystatus")
+	s.stream.Status(subunit.Event{TestID: "", Status: "dummystatus"})
 	s.output.Next(3) // skip the signature (1 byte) and the flags (2 bytes)
 	length := s.output.Next(1)[0]
 	// signature (1 byte) + flags (2 bytes) + length (2 bytes) + CRC32 (4 bytes)
@@ -140,7 +141,7 @@ func (s *SubunitSuite) TestPacketLength(c *check.C) {
 }
 
 func (s *SubunitSuite) TestPacketCRC32(c *check.C) {
-	s.stream.Status("", "")
+	s.stream.Status(subunit.Event{TestID: "", Status: ""})
 	// skip the signature (1 byte), the flags (2 bytes) and the length (1 byte)
 	s.output.Next(4)
 	crc := s.output.Next(4)
@@ -174,7 +175,7 @@ func (s *SubunitSuite) TestPacketTestID(c *check.C) {
 	for _, t := range idtests {
 		s.output.Reset()
 		testID := t.testIDPrefix + strings.Repeat("_", t.testIDLen-len(t.testIDPrefix))
-		s.stream.Status(testID, "")
+		s.stream.Status(subunit.Event{TestID: testID, Status: ""})
 		// skip the signature (1 byte) and the flags (2 bytes)
 		s.output.Next(3)
 		// skip the packet length (variable size)
@@ -184,4 +185,39 @@ func (s *SubunitSuite) TestPacketTestID(c *check.C) {
 		id := string(s.output.Next(idLen))
 		c.Check(id, check.Equals, testID, check.Commentf("Wrong ID"))
 	}
+}
+
+func (s *SubunitSuite) TestWithoutTimestampPacketMustNotSetPresentFlag(c *check.C) {
+	s.stream.Status(subunit.Event{})
+	s.output.Next(1) // skip the signature.
+	flags := s.output.Next(2)
+	testIDPresent := flags[0] & 0x2 // bit 9.
+	c.Assert(testIDPresent, check.Equals, uint8(0x0),
+		check.Commentf("Timestamp present flag is set"))
+}
+
+func (s *SubunitSuite) TestWithTimestampPacketMustSetPresentFlag(c *check.C) {
+	s.stream.Status(subunit.Event{Timestamp: time.Now()})
+	s.output.Next(1) // skip the signature.
+	flags := s.output.Next(2)
+	testIDPresent := flags[0] & 0x2 // bit 9.
+	c.Assert(testIDPresent, check.Equals, uint8(0x2),
+		check.Commentf("Timestamp present flag is not set"))
+}
+
+func (s *SubunitSuite) TestPacketTimestamp(c *check.C) {
+	t := time.Now()
+	s.stream.Status(subunit.Event{Timestamp: t})
+	// skip the signature (1 byte) and the flags (2 bytes)
+	s.output.Next(3)
+	// skip the packet length (variable size)
+	s.readNumber()
+	var sec uint32
+	secondsBytes := s.output.Next(4)
+	err := binary.Read(bytes.NewReader(secondsBytes), binary.BigEndian, &sec)
+	c.Assert(err, check.IsNil, check.Commentf("Error reading the timestamp seconds: %s", err))
+	nsec := s.readNumber()
+
+	timestamp := time.Unix(int64(sec), int64(nsec))
+	c.Assert(timestamp, check.Equals, t, check.Commentf("Wrong timestamp"))
 }

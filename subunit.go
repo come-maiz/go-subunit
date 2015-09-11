@@ -26,12 +26,14 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"time"
 )
 
 const (
-	signature     byte = 0xb3
-	version       byte = 0x2
-	testIDPresent byte = 0x8
+	signature        byte = 0xb3
+	version          byte = 0x2
+	testIDPresent    byte = 0x8
+	timestampPresent byte = 0x2
 )
 
 var status = map[string]byte{
@@ -68,26 +70,32 @@ type StreamResultToBytes struct {
 	Output io.Writer
 }
 
-type packet struct {
-	testID string
-	status string
+// Event is a status or a file attachment event.
+type Event struct {
+	TestID    string
+	Status    string
+	Timestamp time.Time
 }
 
-func (p *packet) write(writer io.Writer) error {
+func (e *Event) write(writer io.Writer) error {
 	// PACKET := SIGNATURE FLAGES PACKET_LENGTH TIMESTAMP? TESTID? TAGS? MIME? FILECONTENT?
 	//           ROUTING_CODE? CRC32
 
 	flagsChan := make(chan []byte)
-	go p.makeFlags(flagsChan)
+	go e.makeFlags(flagsChan)
+
+	timestampChan := make(chan []byte)
+	go e.makeTimestamp(timestampChan)
 
 	idChan := make(chan []byte)
-	go p.makeTestID(idChan)
+	go e.makeTestID(idChan)
 
 	// We construct a temporary buffer because we won't know the lenght until it's finished.
 	// Then we insert the lenght.
 	var bTemp bytes.Buffer
 	bTemp.WriteByte(signature)
 	bTemp.Write(<-flagsChan)
+	bTemp.Write(<-timestampChan)
 	bTemp.Write(<-idChan)
 
 	length, err := makeLen(bTemp.Len())
@@ -108,26 +116,38 @@ func (p *packet) write(writer io.Writer) error {
 	return err
 }
 
-func (p *packet) makeFlags(c chan<- []byte) {
+func (e *Event) makeFlags(c chan<- []byte) {
 	flags := make([]byte, 2, 2)
 	flags[0] = version << 4
-	if p.testID != "" {
+	if e.TestID != "" {
 		flags[0] = flags[0] | testIDPresent
 	}
-	flags[1] = flags[1] | status[p.status]
+	if !e.Timestamp.IsZero() {
+		flags[0] = flags[0] | timestampPresent
+	}
+	flags[1] = flags[1] | status[e.Status]
 	c <- flags
 }
 
-func (p *packet) makeTestID(c chan<- []byte) {
+func (e *Event) makeTestID(c chan<- []byte) {
 	var testID bytes.Buffer
-	if p.testID != "" {
-		writeNumber(&testID, len(p.testID))
-		testID.WriteString(p.testID)
+	if e.TestID != "" {
+		writeNumber(&testID, len(e.TestID))
+		testID.WriteString(e.TestID)
 	}
 	c <- testID.Bytes()
 }
 
-func writeNumber(b *bytes.Buffer, num int) (err error) {
+func (e *Event) makeTimestamp(c chan<- []byte) {
+	var timestamp bytes.Buffer
+	if !e.Timestamp.IsZero() {
+		binary.Write(&timestamp, binary.BigEndian, uint32(e.Timestamp.Unix()))
+		writeNumber(&timestamp, int(e.Timestamp.UnixNano()%1000000000))
+	}
+	c <- timestamp.Bytes()
+}
+
+func writeNumber(b io.Writer, num int) (err error) {
 	// The first two bits encode the size:
 	// 00 = 1 byte
 	// 01 = 2 bytes
@@ -157,7 +177,6 @@ func writeNumber(b *bytes.Buffer, num int) (err error) {
 }
 
 // Status informs the result about a test status.
-func (s *StreamResultToBytes) Status(testID, testStatus string) error {
-	p := packet{testID: testID, status: testStatus}
-	return p.write(s.Output)
+func (s *StreamResultToBytes) Status(e Event) error {
+	return e.write(s.Output)
 }
