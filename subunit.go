@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"time"
 )
 
 const (
@@ -73,7 +74,7 @@ type StreamResultToBytes struct {
 type Event struct {
 	TestID    string
 	Status    string
-	Timestamp string
+	Timestamp time.Time
 }
 
 func (e *Event) write(writer io.Writer) error {
@@ -83,6 +84,9 @@ func (e *Event) write(writer io.Writer) error {
 	flagsChan := make(chan []byte)
 	go e.makeFlags(flagsChan)
 
+	timestampChan := make(chan []byte)
+	go e.makeTimestamp(timestampChan)
+
 	idChan := make(chan []byte)
 	go e.makeTestID(idChan)
 
@@ -91,6 +95,7 @@ func (e *Event) write(writer io.Writer) error {
 	var bTemp bytes.Buffer
 	bTemp.WriteByte(signature)
 	bTemp.Write(<-flagsChan)
+	bTemp.Write(<-timestampChan)
 	bTemp.Write(<-idChan)
 
 	length, err := makeLen(bTemp.Len())
@@ -117,7 +122,7 @@ func (e *Event) makeFlags(c chan<- []byte) {
 	if e.TestID != "" {
 		flags[0] = flags[0] | testIDPresent
 	}
-	if e.Timestamp != "" {
+	if !e.Timestamp.IsZero() {
 		flags[0] = flags[0] | timestampPresent
 	}
 	flags[1] = flags[1] | status[e.Status]
@@ -131,6 +136,15 @@ func (e *Event) makeTestID(c chan<- []byte) {
 		testID.WriteString(e.TestID)
 	}
 	c <- testID.Bytes()
+}
+
+func (e *Event) makeTimestamp(c chan<- []byte) {
+	var timestamp bytes.Buffer
+	if !e.Timestamp.IsZero() {
+		binary.Write(&timestamp, binary.BigEndian, uint32(e.Timestamp.Unix()))
+		writeNumber(&timestamp, int(e.Timestamp.UnixNano()%1000000000))
+	}
+	c <- timestamp.Bytes()
 }
 
 func writeNumber(b io.Writer, num int) (err error) {

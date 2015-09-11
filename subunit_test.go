@@ -197,7 +197,7 @@ func (s *SubunitSuite) TestWithoutTimestampPacketMustNotSetPresentFlag(c *check.
 }
 
 func (s *SubunitSuite) TestWithTimestampPacketMustSetPresentFlag(c *check.C) {
-	s.stream.Status(subunit.Event{Timestamp: "dummytimestamp"})
+	s.stream.Status(subunit.Event{Timestamp: time.Now()})
 	s.output.Next(1) // skip the signature.
 	flags := s.output.Next(2)
 	testIDPresent := flags[0] & 0x2 // bit 9.
