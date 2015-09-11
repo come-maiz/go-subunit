@@ -73,7 +73,7 @@ func (s *SubunitReferenceSuite) TestReference(c *check.C) {
 	for _, t := range referencetests {
 		var goOutput bytes.Buffer
 		stream := &subunit.StreamResultToBytes{Output: &goOutput}
-		err := stream.Status(t.id, t.status)
+		err := stream.Status(subunit.Event{TestID: t.id, Status: t.status})
 		c.Check(err, check.IsNil, check.Commentf("Error running the go version of subunit"))
 
 		cmd := exec.Command("python", "-c", fmt.Sprintf(
