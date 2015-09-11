@@ -89,7 +89,7 @@ func (s *SubunitSuite) TestWithoutIDPacketMustNotSetPresentFlag(c *check.C) {
 	s.stream.Status(subunit.Event{TestID: "", Status: "dummystatus"})
 	s.output.Next(1) // skip the signature.
 	flags := s.output.Next(2)
-	testIDPresent := flags[0] & 0x8 // bit 11 of the first byte.
+	testIDPresent := flags[0] & 0x8 // bit 11.
 	c.Assert(testIDPresent, check.Equals, uint8(0x0),
 		check.Commentf("Test ID present flag is set"))
 }
@@ -98,7 +98,7 @@ func (s *SubunitSuite) TestWithIDPacketMustSetPresentFlag(c *check.C) {
 	s.stream.Status(subunit.Event{TestID: "test-id", Status: "dummystatus"})
 	s.output.Next(1) // skip the signature.
 	flags := s.output.Next(2)
-	testIDPresent := flags[0] & 0x8 // bit 11 of the first byte.
+	testIDPresent := flags[0] & 0x8 // bit 11.
 	c.Assert(testIDPresent, check.Equals, uint8(0x8),
 		check.Commentf("Test ID present flag is not set"))
 }
@@ -184,4 +184,22 @@ func (s *SubunitSuite) TestPacketTestID(c *check.C) {
 		id := string(s.output.Next(idLen))
 		c.Check(id, check.Equals, testID, check.Commentf("Wrong ID"))
 	}
+}
+
+func (s *SubunitSuite) TestWithoutTimestampPacketMustNotSetPresentFlag(c *check.C) {
+	s.stream.Status(subunit.Event{})
+	s.output.Next(1) // skip the signature.
+	flags := s.output.Next(2)
+	testIDPresent := flags[0] & 0x2 // bit 9.
+	c.Assert(testIDPresent, check.Equals, uint8(0x0),
+		check.Commentf("Timestamp present flag is set"))
+}
+
+func (s *SubunitSuite) TestWithTimestampPacketMustSetPresentFlag(c *check.C) {
+	s.stream.Status(subunit.Event{Timestamp: "dummytimestamp"})
+	s.output.Next(1) // skip the signature.
+	flags := s.output.Next(2)
+	testIDPresent := flags[0] & 0x2 // bit 9.
+	c.Assert(testIDPresent, check.Equals, uint8(0x2),
+		check.Commentf("Timestamp present flag is not set"))
 }
