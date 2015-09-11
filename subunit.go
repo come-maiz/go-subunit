@@ -29,9 +29,10 @@ import (
 )
 
 const (
-	signature     byte = 0xb3
-	version       byte = 0x2
-	testIDPresent byte = 0x8
+	signature        byte = 0xb3
+	version          byte = 0x2
+	testIDPresent    byte = 0x8
+	timestampPresent byte = 0x2
 )
 
 var status = map[string]byte{
@@ -70,8 +71,9 @@ type StreamResultToBytes struct {
 
 // Event is a status or a file attachment event.
 type Event struct {
-	TestID string
-	Status string
+	TestID    string
+	Status    string
+	Timestamp string
 }
 
 func (e *Event) write(writer io.Writer) error {
@@ -114,6 +116,9 @@ func (e *Event) makeFlags(c chan<- []byte) {
 	flags[0] = version << 4
 	if e.TestID != "" {
 		flags[0] = flags[0] | testIDPresent
+	}
+	if e.Timestamp != "" {
+		flags[0] = flags[0] | timestampPresent
 	}
 	flags[1] = flags[1] | status[e.Status]
 	c <- flags
