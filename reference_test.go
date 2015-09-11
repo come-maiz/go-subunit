@@ -78,7 +78,8 @@ var referencetests = []subunit.Event{
 
 	// Test with timestamp.
 	// Round to microseconds because python's datetime does not accept nanoseconds.
-	{TestID: "test-with-timestamp", Status: "success", Timestamp: time.Now().Round(time.Microsecond)},
+	{TestID: "test-with-timestamp", Status: "success",
+		Timestamp: time.Now().UTC().Round(time.Microsecond)},
 }
 
 func (s *SubunitReferenceSuite) TestReference(c *check.C) {
