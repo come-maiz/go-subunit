@@ -24,6 +24,7 @@ import (
 	"encoding/binary"
 	"hash/crc32"
 	"strings"
+	"time"
 
 	"github.com/elopio/subunit"
 
@@ -202,4 +203,21 @@ func (s *SubunitSuite) TestWithTimestampPacketMustSetPresentFlag(c *check.C) {
 	testIDPresent := flags[0] & 0x2 // bit 9.
 	c.Assert(testIDPresent, check.Equals, uint8(0x2),
 		check.Commentf("Timestamp present flag is not set"))
+}
+
+func (s *SubunitSuite) TestPacketTimestamp(c *check.C) {
+	t := time.Now()
+	s.stream.Status(subunit.Event{Timestamp: t})
+	// skip the signature (1 byte) and the flags (2 bytes)
+	s.output.Next(3)
+	// skip the packet length (variable size)
+	s.readNumber()
+	var sec uint32
+	secondsBytes := s.output.Next(4)
+	err := binary.Read(bytes.NewReader(secondsBytes), binary.BigEndian, &sec)
+	c.Assert(err, check.IsNil, check.Commentf("Error reading the timestamp seconds: %s", err))
+	nsec := s.readNumber()
+
+	timestamp := time.Unix(int64(sec), int64(nsec))
+	c.Assert(timestamp, check.Equals, t, check.Commentf("Wrong timestamp"))
 }
