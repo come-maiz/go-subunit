@@ -127,7 +127,7 @@ func (p *packet) makeTestID(c chan<- []byte) {
 	c <- testID.Bytes()
 }
 
-func writeNumber(b *bytes.Buffer, num int) (err error) {
+func writeNumber(b io.Writer, num int) (err error) {
 	// The first two bits encode the size:
 	// 00 = 1 byte
 	// 01 = 2 bytes
