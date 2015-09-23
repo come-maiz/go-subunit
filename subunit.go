@@ -21,7 +21,6 @@
 package subunit
 
 import (
-	"errors"
 	"bytes"
 	"encoding/binary"
 	"fmt"
@@ -66,7 +65,7 @@ var status = map[string]byte{
 }
 
 func makeLen(baseLen int) (length int, err error) {
-	lenght = baseLen + 4 // Add the length of the CRC32.
+	length = baseLen + 4 // Add the length of the CRC32.
 	// We need to take into account the variable length of the length field itself.
 	switch {
 	case length <= 62:
