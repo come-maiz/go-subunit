@@ -191,7 +191,7 @@ func writeNumber(b io.Writer, num int) (err error) {
 		// Set the size to 11.
 		binary.Write(b, binary.BigEndian, uint32(num|0xc0000000))
 	default:
-		err = &ErrNumber(num)
+		err = &ErrNumber{num}
 	}
 
 	return err
