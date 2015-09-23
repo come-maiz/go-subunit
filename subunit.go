@@ -36,7 +36,7 @@ type ErrPacketLen struct {
 }
 	
 func (e *ErrPacketLen) Error() string {
-	return fmt.Errorf("packet too big (%d bytes)", e.Length)
+	return fmt.Sprintf("packet too big (%d bytes)", e.Length)
 }
 
 // ErrNumber represents an error for a number that is over the size
@@ -45,7 +45,7 @@ type ErrNumber struct {
 }
 	
 func (e *ErrNumber) Error() string {
-	return fmt.Errorf("number too big (%d)", e.Number)
+	return fmt.Sprintf("number too big (%d)", e.Number)
 }
 
 const (
