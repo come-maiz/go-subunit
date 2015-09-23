@@ -29,6 +29,24 @@ import (
 	"time"
 )
 
+// ErrPacketLen represents an unhandled packet length error
+type ErrPacketLen struct {
+	Length int
+}
+	
+func (e *ErrPacketLen) Error() string {
+	return fmt.Sprintf("packet too big (%d bytes)", e.Length)
+}
+
+// ErrNumber represents an error for a number that is over the size
+type ErrNumber struct {
+	Number int
+}
+	
+func (e *ErrNumber) Error() string {
+	return fmt.Sprintf("number too big (%d)", e.Number)
+}
+
 const (
 	signature        byte = 0xb3
 	version          byte = 0x2
@@ -46,23 +64,24 @@ var status = map[string]byte{
 	"xfail":      0x7,
 }
 
-func makeLen(baseLen int) (len int, err error) {
-	len = baseLen + 4 // Add the length of the CRC32.
+func makeLen(baseLen int) (length int, err error) {
+	length = baseLen + 4 // Add the length of the CRC32.
 	// We need to take into account the variable length of the length field itself.
 	switch {
-	case len <= 62:
+	case length <= 62:
 		// Fits in one byte.
-		len++
-	case len <= 16381:
+		length++
+	case length <= 16381:
 		// Fits in two bytes.
-		len += 2
-	case len <= 4194300:
+		length += 2
+	case length <= 4194300:
 		// Fits in three bytes.
-		len += 3
+		length += 3
 	default:
-		err = fmt.Errorf("The packet is too big. Length: %d bytes", len)
+		err = &ErrPacketLen{length}
 	}
-	return len, err
+
+	return length, err
 }
 
 // StreamResultToBytes is an implementation of the StreamResult API that converts calls to bytes.
@@ -171,8 +190,9 @@ func writeNumber(b io.Writer, num int) (err error) {
 		// Set the size to 11.
 		binary.Write(b, binary.BigEndian, uint32(num|0xc0000000))
 	default:
-		err = fmt.Errorf("Number is too big: %d", num)
+		err = &ErrNumber{num}
 	}
+
 	return err
 }
 
