@@ -52,6 +52,7 @@ const (
 	version          byte = 0x2
 	testIDPresent    byte = 0x8
 	timestampPresent byte = 0x2
+	mimePresent      byte = 0x20
 )
 
 var status = map[string]byte{
@@ -94,6 +95,7 @@ type Event struct {
 	TestID    string
 	Status    string
 	Timestamp time.Time
+	MIME      string
 }
 
 func (e *Event) write(writer io.Writer) error {
@@ -109,6 +111,9 @@ func (e *Event) write(writer io.Writer) error {
 	idChan := make(chan []byte)
 	go e.makeTestID(idChan)
 
+	mimeChan := make(chan []byte)
+	go e.makeMIME(mimeChan)
+
 	// We construct a temporary buffer because we won't know the lenght until it's finished.
 	// Then we insert the lenght.
 	var bTemp bytes.Buffer
@@ -116,6 +121,7 @@ func (e *Event) write(writer io.Writer) error {
 	bTemp.Write(<-flagsChan)
 	bTemp.Write(<-timestampChan)
 	bTemp.Write(<-idChan)
+	bTemp.Write(<-mimeChan)
 
 	length, err := makeLen(bTemp.Len())
 	if err != nil {
@@ -144,6 +150,9 @@ func (e *Event) makeFlags(c chan<- []byte) {
 	if !e.Timestamp.IsZero() {
 		flags[0] = flags[0] | timestampPresent
 	}
+	if e.MIME != "" {
+		flags[1] = flags[1] | mimePresent
+	}
 	flags[1] = flags[1] | status[e.Status]
 	c <- flags
 }
@@ -151,11 +160,11 @@ func (e *Event) makeFlags(c chan<- []byte) {
 func (e *Event) makeTestID(c chan<- []byte) {
 	var testID bytes.Buffer
 	if e.TestID != "" {
-		writeNumber(&testID, len(e.TestID))
-		testID.WriteString(e.TestID)
+		writeUTF8(&testID, e.TestID)
 	}
 	c <- testID.Bytes()
 }
+
 
 func (e *Event) makeTimestamp(c chan<- []byte) {
 	var timestamp bytes.Buffer
@@ -166,6 +175,19 @@ func (e *Event) makeTimestamp(c chan<- []byte) {
 	c <- timestamp.Bytes()
 }
 
+func (e *Event) makeMIME(c chan<- []byte) {
+	var mime bytes.Buffer
+	if e.MIME != "" {
+		writeUTF8(&mime, e.MIME)
+	}
+	c <- mime.Bytes()
+}
+
+func writeUTF8(b io.Writer, s string) {
+	writeNumber(b, len(s))
+	io.WriteString(b, s)
+}
+	
 func writeNumber(b io.Writer, num int) (err error) {
 	// The first two bits encode the size:
 	// 00 = 1 byte
