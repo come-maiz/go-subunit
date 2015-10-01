@@ -49,6 +49,12 @@ func makePythonArgs(e subunit.Event) string {
 			e.Timestamp.Year(), e.Timestamp.Month(), e.Timestamp.Day(), e.Timestamp.Hour(),
 			e.Timestamp.Minute(), e.Timestamp.Second(), e.Timestamp.Nanosecond()/1000)
 	}
+	if e.MIME != "" {
+		args += fmt.Sprintf(", mime_type=%q", e.MIME)
+	}
+	if e.FileName != "" {
+		args += fmt.Sprintf(", file_name=%q, file_bytes=b%q", e.FileName, string(e.FileBytes[:]))
+	}
 	return args
 }
 
@@ -80,6 +86,10 @@ var referencetests = []subunit.Event{
 	// Round to microseconds because python's datetime does not accept nanoseconds.
 	{TestID: "test-with-timestamp", Status: "success",
 		Timestamp: time.Now().UTC().Round(time.Microsecond)},
+
+	// Test with MIME and file content.
+	{TestID: "test-with-mime", Status: "fail",
+		MIME: "text/plain;charset=utf8", FileName: "reason", FileBytes: []byte("error")},
 }
 
 func (s *SubunitReferenceSuite) TestReference(c *check.C) {
