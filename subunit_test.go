@@ -93,7 +93,7 @@ func (s *SubunitSuite) TestWithoutFlagsPacketMustNotSetAnyPresentFlag(c *check.C
 	flagsHighByte := flags[0] & 0xf // Remove the version, 4 first bits.
 	flagsLowByte := flags[1]
 	c.Check(flagsHighByte, check.Equals, uint8(0x0), check.Commentf("Wrong flags high byte"))
-	c.Check(flagsLowByte, check.Equals, uint8(0x0), check.Commentf("Wrong flags low byte"))	
+	c.Check(flagsLowByte, check.Equals, uint8(0x0), check.Commentf("Wrong flags low byte"))
 }
 
 func (s *SubunitSuite) TestWithIDPacketMustSetPresentFlag(c *check.C) {
@@ -234,4 +234,31 @@ func (s *SubunitSuite) TestPacketMIME(c *check.C) {
 	c.Check(idLen, check.Equals, len(testMIME), check.Commentf("Wrong length"))
 	mime := string(s.output.Next(idLen))
 	c.Check(mime, check.Equals, testMIME, check.Commentf("Wrong ID"))
+}
+
+func (s *SubunitSuite) TestWithFileContentPacketMustSetPresentFlag(c *check.C) {
+	s.stream.Status(subunit.Event{FileName: "dummy"})
+	s.output.Next(1) // skip the signature.
+	flags := s.output.Next(2)
+	mimePresent := flags[1] & 0x40 // bit 6.
+	c.Assert(mimePresent, check.Equals, uint8(0x40),
+		check.Commentf("File content present flag not set."))
+}
+
+func (s *SubunitSuite) TestFileContents(c *check.C) {
+	testFileName := "testfilename"
+	testFileBytes := []byte{0x1, 0xb, 0xf0}
+	s.stream.Status(subunit.Event{FileName: testFileName, FileBytes: testFileBytes})
+	// skip the signature (1 byte) and the flags (2 bytes)
+	s.output.Next(3)
+	// skip the packet length (variable size)
+	s.readNumber()
+	fileNameLen := s.readNumber()
+	c.Check(fileNameLen, check.Equals, len(testFileName), check.Commentf("Wrong file name length"))
+	fileName := string(s.output.Next(fileNameLen))
+	c.Check(fileName, check.Equals, testFileName, check.Commentf("Wrong file name"))
+	contentLen := s.readNumber()
+	c.Check(contentLen, check.Equals, len(testFileBytes), check.Commentf("Wrong content length"))
+	content := s.output.Next(contentLen)
+	c.Check(content, check.DeepEquals, testFileBytes, check.Commentf("Wrong content"))
 }
