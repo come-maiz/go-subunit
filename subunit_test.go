@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/elopio/subunit"
+	"github.com/elopio/go-subunit"
 
 	check "gopkg.in/check.v1"
 )
@@ -86,13 +86,14 @@ func (s *SubunitSuite) TestPacketMustContainVersion2Flag(c *check.C) {
 	c.Assert(version, check.Equals, uint8(0x2), check.Commentf("Wrong version"))
 }
 
-func (s *SubunitSuite) TestWithoutIDPacketMustNotSetPresentFlag(c *check.C) {
-	s.stream.Status(subunit.Event{TestID: "", Status: "dummystatus"})
-	s.output.Next(1) // skip the signature.
+func (s *SubunitSuite) TestWithoutFlagsPacketMustNotSetAnyPresentFlag(c *check.C) {
+	s.stream.Status(subunit.Event{})
+	s.output.Next(1) // skip the signature
 	flags := s.output.Next(2)
-	testIDPresent := flags[0] & 0x8 // bit 11.
-	c.Assert(testIDPresent, check.Equals, uint8(0x0),
-		check.Commentf("Test ID present flag is set"))
+	flagsHighByte := flags[0] & 0xf // Remove the version, 4 first bits.
+	flagsLowByte := flags[1]
+	c.Check(flagsHighByte, check.Equals, uint8(0x0), check.Commentf("Wrong flags high byte"))
+	c.Check(flagsLowByte, check.Equals, uint8(0x0), check.Commentf("Wrong flags low byte"))
 }
 
 func (s *SubunitSuite) TestWithIDPacketMustSetPresentFlag(c *check.C) {
@@ -187,15 +188,6 @@ func (s *SubunitSuite) TestPacketTestID(c *check.C) {
 	}
 }
 
-func (s *SubunitSuite) TestWithoutTimestampPacketMustNotSetPresentFlag(c *check.C) {
-	s.stream.Status(subunit.Event{})
-	s.output.Next(1) // skip the signature.
-	flags := s.output.Next(2)
-	testIDPresent := flags[0] & 0x2 // bit 9.
-	c.Assert(testIDPresent, check.Equals, uint8(0x0),
-		check.Commentf("Timestamp present flag is set"))
-}
-
 func (s *SubunitSuite) TestWithTimestampPacketMustSetPresentFlag(c *check.C) {
 	s.stream.Status(subunit.Event{Timestamp: time.Now()})
 	s.output.Next(1) // skip the signature.
@@ -220,4 +212,53 @@ func (s *SubunitSuite) TestPacketTimestamp(c *check.C) {
 
 	timestamp := time.Unix(int64(sec), int64(nsec))
 	c.Assert(timestamp, check.Equals, t, check.Commentf("Wrong timestamp"))
+}
+
+func (s *SubunitSuite) TestWithMIMEPacketMustSetPresentFlag(c *check.C) {
+	s.stream.Status(subunit.Event{MIME: "dummy"})
+	s.output.Next(1) // skip the signature.
+	flags := s.output.Next(2)
+	mimePresent := flags[1] & 0x20 // bit 5.
+	c.Assert(mimePresent, check.Equals, uint8(0x20),
+		check.Commentf("MIME present flag not set."))
+}
+
+func (s *SubunitSuite) TestPacketMIME(c *check.C) {
+	testMIME := "text/plain;charset=utf8"
+	s.stream.Status(subunit.Event{MIME: testMIME})
+	// skip the signature (1 byte) and the flags (2 bytes)
+	s.output.Next(3)
+	// skip the packet length (variable size)
+	s.readNumber()
+	idLen := s.readNumber()
+	c.Check(idLen, check.Equals, len(testMIME), check.Commentf("Wrong length"))
+	mime := string(s.output.Next(idLen))
+	c.Check(mime, check.Equals, testMIME, check.Commentf("Wrong ID"))
+}
+
+func (s *SubunitSuite) TestWithFileContentPacketMustSetPresentFlag(c *check.C) {
+	s.stream.Status(subunit.Event{FileName: "dummy"})
+	s.output.Next(1) // skip the signature.
+	flags := s.output.Next(2)
+	mimePresent := flags[1] & 0x40 // bit 6.
+	c.Assert(mimePresent, check.Equals, uint8(0x40),
+		check.Commentf("File content present flag not set."))
+}
+
+func (s *SubunitSuite) TestFileContents(c *check.C) {
+	testFileName := "testfilename"
+	testFileBytes := []byte{0x1, 0xb, 0xf0}
+	s.stream.Status(subunit.Event{FileName: testFileName, FileBytes: testFileBytes})
+	// skip the signature (1 byte) and the flags (2 bytes)
+	s.output.Next(3)
+	// skip the packet length (variable size)
+	s.readNumber()
+	fileNameLen := s.readNumber()
+	c.Check(fileNameLen, check.Equals, len(testFileName), check.Commentf("Wrong file name length"))
+	fileName := string(s.output.Next(fileNameLen))
+	c.Check(fileName, check.Equals, testFileName, check.Commentf("Wrong file name"))
+	contentLen := s.readNumber()
+	c.Check(contentLen, check.Equals, len(testFileBytes), check.Commentf("Wrong content length"))
+	content := s.output.Next(contentLen)
+	c.Check(content, check.DeepEquals, testFileBytes, check.Commentf("Wrong content"))
 }

@@ -33,7 +33,7 @@ import (
 type ErrPacketLen struct {
 	Length int
 }
-	
+
 func (e *ErrPacketLen) Error() string {
 	return fmt.Sprintf("packet too big (%d bytes)", e.Length)
 }
@@ -42,16 +42,20 @@ func (e *ErrPacketLen) Error() string {
 type ErrNumber struct {
 	Number int
 }
-	
+
 func (e *ErrNumber) Error() string {
 	return fmt.Sprintf("number too big (%d)", e.Number)
 }
 
 const (
-	signature        byte = 0xb3
+	signature byte = 0xb3
+	// Flags high byte
 	version          byte = 0x2
 	testIDPresent    byte = 0x8
 	timestampPresent byte = 0x2
+	// Flags low byte
+	fileContentPresent byte = 0x40
+	mimePresent        byte = 0x20
 )
 
 var status = map[string]byte{
@@ -94,10 +98,13 @@ type Event struct {
 	TestID    string
 	Status    string
 	Timestamp time.Time
+	FileName  string
+	FileBytes []byte
+	MIME      string
 }
 
 func (e *Event) write(writer io.Writer) error {
-	// PACKET := SIGNATURE FLAGES PACKET_LENGTH TIMESTAMP? TESTID? TAGS? MIME? FILECONTENT?
+	// PACKET := SIGNATURE FLAGS PACKET_LENGTH TIMESTAMP? TESTID? TAGS? MIME? FILECONTENT?
 	//           ROUTING_CODE? CRC32
 
 	flagsChan := make(chan []byte)
@@ -109,13 +116,21 @@ func (e *Event) write(writer io.Writer) error {
 	idChan := make(chan []byte)
 	go e.makeTestID(idChan)
 
-	// We construct a temporary buffer because we won't know the lenght until it's finished.
-	// Then we insert the lenght.
+	mimeChan := make(chan []byte)
+	go e.makeMIME(mimeChan)
+
+	fileContentChan := make(chan []byte)
+	go e.makeFileContent(fileContentChan)
+
+	// We construct a temporary buffer because we won't know the length until it's finished.
+	// Then we insert the length.
 	var bTemp bytes.Buffer
 	bTemp.WriteByte(signature)
 	bTemp.Write(<-flagsChan)
 	bTemp.Write(<-timestampChan)
 	bTemp.Write(<-idChan)
+	bTemp.Write(<-mimeChan)
+	bTemp.Write(<-fileContentChan)
 
 	length, err := makeLen(bTemp.Len())
 	if err != nil {
@@ -144,6 +159,12 @@ func (e *Event) makeFlags(c chan<- []byte) {
 	if !e.Timestamp.IsZero() {
 		flags[0] = flags[0] | timestampPresent
 	}
+	if e.FileName != "" {
+		flags[1] = flags[1] | fileContentPresent
+	}
+	if e.MIME != "" {
+		flags[1] = flags[1] | mimePresent
+	}
 	flags[1] = flags[1] | status[e.Status]
 	c <- flags
 }
@@ -151,8 +172,7 @@ func (e *Event) makeFlags(c chan<- []byte) {
 func (e *Event) makeTestID(c chan<- []byte) {
 	var testID bytes.Buffer
 	if e.TestID != "" {
-		writeNumber(&testID, len(e.TestID))
-		testID.WriteString(e.TestID)
+		writeUTF8(&testID, e.TestID)
 	}
 	c <- testID.Bytes()
 }
@@ -164,6 +184,29 @@ func (e *Event) makeTimestamp(c chan<- []byte) {
 		writeNumber(&timestamp, int(e.Timestamp.UnixNano()%1000000000))
 	}
 	c <- timestamp.Bytes()
+}
+
+func (e *Event) makeMIME(c chan<- []byte) {
+	var mime bytes.Buffer
+	if e.MIME != "" {
+		writeUTF8(&mime, e.MIME)
+	}
+	c <- mime.Bytes()
+}
+
+func (e *Event) makeFileContent(c chan<- []byte) {
+	var fileContent bytes.Buffer
+	if e.FileName != "" {
+		writeUTF8(&fileContent, e.FileName)
+		writeNumber(&fileContent, len(e.FileBytes))
+		fileContent.Write(e.FileBytes)
+	}
+	c <- fileContent.Bytes()
+}
+
+func writeUTF8(b io.Writer, s string) {
+	writeNumber(b, len(s))
+	io.WriteString(b, s)
 }
 
 func writeNumber(b io.Writer, num int) (err error) {
