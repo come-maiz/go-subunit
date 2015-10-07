@@ -132,8 +132,7 @@ func (e *Event) write(writer io.Writer) error {
 	var bTemp bytes.Buffer
 	bTemp.WriteByte(signature)
 	bTemp.Write(<-flagsChan)
-	parts := []packetPart{<-timestampChan, <-idChan, <-mimeChan, <-fileContentChan}
-	for _, part := range parts{
+	for _, part := range []packetPart{<-timestampChan, <-idChan, <-mimeChan, <-fileContentChan}{
 		if part.err != nil {
 			return part.err
 		}
