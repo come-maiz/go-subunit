@@ -103,6 +103,11 @@ type Event struct {
 	MIME      string
 }
 
+type packetPart struct {
+	bytes []byte
+	err   error
+}
+
 func (e *Event) write(writer io.Writer) error {
 	// PACKET := SIGNATURE FLAGS PACKET_LENGTH TIMESTAMP? TESTID? TAGS? MIME? FILECONTENT?
 	//           ROUTING_CODE? CRC32
@@ -110,16 +115,16 @@ func (e *Event) write(writer io.Writer) error {
 	flagsChan := make(chan []byte)
 	go e.makeFlags(flagsChan)
 
-	timestampChan := make(chan []byte)
+	timestampChan := make(chan packetPart)
 	go e.makeTimestamp(timestampChan)
 
-	idChan := make(chan []byte)
+	idChan := make(chan packetPart)
 	go e.makeTestID(idChan)
 
-	mimeChan := make(chan []byte)
+	mimeChan := make(chan packetPart)
 	go e.makeMIME(mimeChan)
 
-	fileContentChan := make(chan []byte)
+	fileContentChan := make(chan packetPart)
 	go e.makeFileContent(fileContentChan)
 
 	// We construct a temporary buffer because we won't know the length until it's finished.
@@ -127,10 +132,12 @@ func (e *Event) write(writer io.Writer) error {
 	var bTemp bytes.Buffer
 	bTemp.WriteByte(signature)
 	bTemp.Write(<-flagsChan)
-	bTemp.Write(<-timestampChan)
-	bTemp.Write(<-idChan)
-	bTemp.Write(<-mimeChan)
-	bTemp.Write(<-fileContentChan)
+	for _, part := range []packetPart{<-timestampChan, <-idChan, <-mimeChan, <-fileContentChan}{
+		if part.err != nil {
+			return part.err
+		}
+		bTemp.Write(part.bytes)
+	}
 
 	length, err := makeLen(bTemp.Len())
 	if err != nil {
@@ -169,44 +176,58 @@ func (e *Event) makeFlags(c chan<- []byte) {
 	c <- flags
 }
 
-func (e *Event) makeTestID(c chan<- []byte) {
+func (e *Event) makeTestID(c chan<- packetPart) {
 	var testID bytes.Buffer
+	var err error
 	if e.TestID != "" {
-		writeUTF8(&testID, e.TestID)
+		err = writeUTF8(&testID, e.TestID)
 	}
-	c <- testID.Bytes()
+	c <- packetPart{testID.Bytes(), err}
 }
 
-func (e *Event) makeTimestamp(c chan<- []byte) {
+func (e *Event) makeTimestamp(c chan<- packetPart) {
 	var timestamp bytes.Buffer
+	var err error
 	if !e.Timestamp.IsZero() {
-		binary.Write(&timestamp, binary.BigEndian, uint32(e.Timestamp.Unix()))
-		writeNumber(&timestamp, int(e.Timestamp.UnixNano()%1000000000))
+		err = binary.Write(&timestamp, binary.BigEndian, uint32(e.Timestamp.Unix()))
+		if err == nil {
+			err = writeNumber(&timestamp, int(e.Timestamp.UnixNano()%1000000000))
+		}
 	}
-	c <- timestamp.Bytes()
+	c <- packetPart{timestamp.Bytes(), err}
 }
 
-func (e *Event) makeMIME(c chan<- []byte) {
+func (e *Event) makeMIME(c chan<- packetPart) {
 	var mime bytes.Buffer
+	var err error
 	if e.MIME != "" {
-		writeUTF8(&mime, e.MIME)
+		err = writeUTF8(&mime, e.MIME)
 	}
-	c <- mime.Bytes()
+	c <- packetPart{mime.Bytes(), err}
 }
 
-func (e *Event) makeFileContent(c chan<- []byte) {
+func (e *Event) makeFileContent(c chan<- packetPart) {
 	var fileContent bytes.Buffer
+	var err error
 	if e.FileName != "" {
-		writeUTF8(&fileContent, e.FileName)
-		writeNumber(&fileContent, len(e.FileBytes))
-		fileContent.Write(e.FileBytes)
+		err = writeUTF8(&fileContent, e.FileName)
+		if err == nil {
+			err = writeNumber(&fileContent, len(e.FileBytes))
+		}
+		if err == nil {
+			_, err = fileContent.Write(e.FileBytes)
+		}
 	}
-	c <- fileContent.Bytes()
+	c <- packetPart{fileContent.Bytes(), err}
 }
 
-func writeUTF8(b io.Writer, s string) {
-	writeNumber(b, len(s))
-	io.WriteString(b, s)
+func writeUTF8(b io.Writer, s string) error {
+	err := writeNumber(b, len(s))
+	if err != nil {
+		return err
+	}
+	_, err = io.WriteString(b, s)
+	return err
 }
 
 func writeNumber(b io.Writer, num int) (err error) {
